@@ -1,87 +1,77 @@
+#include "../include/i2c_ddc.h"
 #include <Adafruit_NeoPixel.h>
-#include <Wire.h>
+#define LEDPIN 10
+#define SWITCH_PIN_1 8
+#define SWITCH_PIN_2 9
+#define USB_PIN_1 15
+#define USB_PIN_2 14
+#define NUMPIXELS 2
+#define DISPLAY_OUT_1 0xf
+#define DISPLAY_OUT_2 0x10
 
-#define PIN 10
-#define NUMPIXELS 4
-#define TXLED 1
 Adafruit_NeoPixel strip =
-    Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-
+    Adafruit_NeoPixel(NUMPIXELS, LEDPIN, NEO_GRB + NEO_KHZ800);
+ddc ddc_controller;
+int output = DISPLAY_OUT_1;
 // Input a value 0 to 255 to get a color value.
 // The colours are a transition r - g - b - back to r.
-uint32_t Wheel(byte WheelPos) {
-  if (WheelPos < 85) {
-    return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-  } else if (WheelPos < 170) {
-    WheelPos -= 85;
-    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-  } else {
-    WheelPos -= 170;
-    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-  }
-}
-void rainbow(uint8_t wait) {
-
-  uint16_t i, j;
-
-  for (j = 0; j < 256; j++) {
-    for (i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel((i + j) & 255));
-    }
-    strip.show();
-    delay(wait);
-  }
-}
 
 void setup() {
+  int channel;
   Serial.begin(115200);
-  Wire.begin();
-  strip.begin();          // initialize strip
-  strip.show();           // Initialize all pixels to 'off'
-  pinMode(TXLED, OUTPUT); // Set RX LED as an output
+  pinMode(SWITCH_PIN_1, INPUT_PULLUP);
+  pinMode(SWITCH_PIN_2, INPUT_PULLUP);
+  pinMode(USB_PIN_2, OUTPUT);
+  pinMode(USB_PIN_1, OUTPUT);
+  digitalWrite(USB_PIN_1, LOW);
+  digitalWrite(USB_PIN_2, LOW);
+  strip.begin(); // initialize strip
+  strip.show();  // Initialize all pixels to 'off'
+  channel = ddc_controller.get_display_channel();
+  if (channel == 0xf) {
+    strip.setPixelColor(0, 0, 0, 0);
+    strip.setPixelColor(1, 2, 0, 0);
+    digitalWrite(USB_PIN_1, HIGH);
+    digitalWrite(USB_PIN_2, LOW);
+    delay(100);
+    digitalWrite(USB_PIN_1, LOW);
+  } else {
+    strip.setPixelColor(0, 2, 0, 0);
+    strip.setPixelColor(1, 0, 0, 0);
+    digitalWrite(USB_PIN_2, HIGH);
+    digitalWrite(USB_PIN_1, LOW);
+    delay(100);
+    digitalWrite(USB_PIN_2, LOW);
+  }
+  strip.show();
 }
 
 void loop() {
-  int nDevices = 0;
 
-  Serial.println("test");
-  Serial.write("test");
-  delay(1000);
-  digitalWrite(TXLED, LOW); // set the RX LED ON
-
-  delay(10); // waits for a second
-  rainbow(20);
-
-  delay(1000);               // waits for a second
-  digitalWrite(TXLED, HIGH); // set the RX LED ON
-  Serial.println("Scanning...");
-  for (byte address = 1; address < 127; ++address) {
-    // The i2c_scanner uses the return value of
-    // the Write.endTransmisstion to see if
-    // a device did acknowledge to the address.
-    Wire.beginTransmission(address);
-    byte error = Wire.endTransmission();
-
-    if (error == 0) {
-      Serial.print("I2C device found at address 0x");
-      if (address < 16) {
-        Serial.print("0");
-      }
-      Serial.print(address, HEX);
-      Serial.println("  !");
-
-      ++nDevices;
-    } else if (error == 4) {
-      Serial.print("Unknown error at address 0x");
-      if (address < 16) {
-        Serial.print("0");
-      }
-      Serial.println(address, HEX);
-    }
+  if (digitalRead(SWITCH_PIN_1) == 0) {
+    output = DISPLAY_OUT_1;
+    ddc_controller.set_display_channel(0xf);
+    strip.setPixelColor(0, 0, 0, 0);
+    strip.setPixelColor(1, 2, 0, 0);
+    strip.show();
+    digitalWrite(USB_PIN_1, HIGH);
+    digitalWrite(USB_PIN_2, LOW);
+    delay(100);
+    digitalWrite(USB_PIN_1, LOW);
+    delay(1000);
   }
-  if (nDevices == 0) {
-    Serial.println("No I2C devices found\n");
-  } else {
-    Serial.println("done\n");
+  if (digitalRead(SWITCH_PIN_2) == 0) {
+    output = DISPLAY_OUT_2;
+    ddc_controller.set_display_channel(0x10);
+    strip.setPixelColor(0, 2, 0, 0);
+    strip.setPixelColor(1, 0, 0, 0);
+    strip.show();
+    digitalWrite(USB_PIN_2, HIGH);
+    digitalWrite(USB_PIN_1, LOW);
+    delay(100);
+    digitalWrite(USB_PIN_2, LOW);
+    delay(1000);
   }
+  // Serial.println("Getting current channel:");
+  // channel = ddc_controller.get_display_channel();
 }
